@@ -136,6 +136,8 @@ def expr (style : Style) (depth : Nat) : Expr → String
   | .arrow returnType body =>
     "()" ++ (match returnType with | none => "" | some type => ": " ++ type) ++
       " => " ++ expr style depth body
+  | .generic fn typeArgs =>
+    expr style depth fn ++ "<" ++ String.intercalate ", " typeArgs ++ ">"
 
 def exprs (style : Style) (depth : Nat) : List Expr → List String
   | [] => []
@@ -168,6 +170,18 @@ def stmt (style : Style) (depth : Nat) : Stmt → String
       expr style depth value
   | .ret value =>
     indentOf style depth ++ "return " ++ expr style depth value
+  | .yieldDiscard value =>
+    indentOf style depth ++ "yield* " ++ expr style depth value
+
+def classDecl (style : Style) (declaration : ClassDecl) : String :=
+  docBlock declaration.doc ++ "export class " ++ declaration.name ++
+    (match declaration.heritage with
+     | none => ""
+     | some heritage => " extends " ++ expr style 0 heritage) ++
+    (if declaration.members.isEmpty then " {}\n"
+     else " {\n" ++
+       String.intercalate "\n" (declaration.members.map (indentOf style 1 ++ ·)) ++
+       "\n}\n")
 
 def progDecl (style : Style) (declaration : ProgDecl) : String :=
   docBlock declaration.doc ++ "export const " ++ declaration.name ++ " = (" ++
@@ -236,6 +250,7 @@ def decl (style : Style) : Decl → String
   | .const declaration => constDecl style declaration
   | .prog declaration => progDecl style declaration
   | .effectfulField declaration => effectfulFieldDecl style declaration
+  | .classDecl declaration => classDecl style declaration
   | .raw text => text ++ "\n"
 
 def import_ (style : Style) : Import → String

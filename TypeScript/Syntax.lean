@@ -40,6 +40,9 @@ inductive Expr where
   | arr (items : List Expr)
   /-- A zero-parameter arrow with an optional declared result type. -/
   | arrow (returnType : Option String) (body : Expr)
+  /-- A reference applied to explicit type arguments, `fn<T1, T2>`. Type
+  arguments are target type spellings. -/
+  | generic (fn : Expr) (typeArgs : List String)
   deriving Inhabited
 
 -- Keep the existing equality API total. Lean's BEq deriving handler uses a
@@ -59,6 +62,7 @@ mutual
     | .objectFromEntries xs, .objectFromEntries ys => beqExprFields xs ys
     | .arr xs, .arr ys => beqExprList xs ys
     | .arrow ty a, .arrow ty' b => ty == ty' && instBEqExpr.beq a b
+    | .generic f xs, .generic g ys => instBEqExpr.beq f g && xs == ys
     | _, _ => false
   termination_by structural self
 
@@ -89,6 +93,8 @@ inductive Stmt where
   | constYield (name : String) (value : Expr)
   /-- `return value`. -/
   | ret (value : Expr)
+  /-- `yield* value` with the answer discarded. -/
+  | yieldDiscard (value : Expr)
   deriving BEq
 
 /-- An exported constant declaration with an optional target type spelling. -/
@@ -123,6 +129,16 @@ structure EffectfulFieldDecl where
   writeError : String
   deriving BEq
 
+/-- An exported class with an optional heritage expression and verbatim
+member lines. The heritage is an expression because Effect's service classes
+extend a call, `Context.Service<Self, Shape>()("Name")`. -/
+structure ClassDecl where
+  doc : List String
+  name : String
+  heritage : Option Expr
+  members : List String := []
+  deriving BEq
+
 /-- One declaration in a generated TypeScript module. `raw` is retained only
 as the Foldlab compatibility escape hatch for generated local helpers. It is
 not admitted as checked Effect4 target syntax and receives no lowering rule. -/
@@ -130,6 +146,7 @@ inductive Decl where
   | const (decl : ConstDecl)
   | prog (decl : ProgDecl)
   | effectfulField (declaration : EffectfulFieldDecl)
+  | classDecl (declaration : ClassDecl)
   | raw (text : String)
   deriving BEq
 

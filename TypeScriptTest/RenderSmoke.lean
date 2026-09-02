@@ -15,3 +15,14 @@ example : targetIdentifier "delete" = false := by native_decide
 example : qualifiedIdentifier "Context.Service" = true := by native_decide
 
 end TypeScriptTest
+
+namespace TypeScriptTest
+open TypeScript
+
+example : Render.decl house0 (.classDecl
+    { doc := [], name := "Cell",
+      heritage := some (.call (.call (.generic (.ident "Context.Service") ["Cell", "{ readonly get: () => Effect.Effect<number> }"]) []) [.str "Cell"]) }) =
+    "export class Cell extends Context.Service<Cell, { readonly get: () => Effect.Effect<number> }>()(\"Cell\") {}\n" := by
+  native_decide
+
+end TypeScriptTest
