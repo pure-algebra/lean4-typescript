@@ -2,6 +2,7 @@ import TypeScript.Syntax
 import TypeScript.Render
 import TypeScript.Identifier
 import TypeScript.HostPin
+import TypeScript.Structure
 
 /-!
 # TypeScript
