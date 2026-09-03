@@ -180,10 +180,13 @@ def emitNode (g : Graph) (shapes : Shapes)
       let placed := if isLoopHeader g m then [shapes.loop (loopLabel m) inner] else inner
       pure ([shapes.merge (blockLabel m) acc] ++ placed)
 
-/-- Emit a reducible graph from its entry. -/
+/-- Emit a reducible graph from its entry; an entry that is itself a loop
+header is wrapped in its loop like any other header. -/
 def emitWith (g : Graph) (shapes : Shapes)
-    (body : Nat → (Nat → Option (List Stmt)) → Option (List Stmt)) : Option (List Stmt) :=
-  if reducible g then emitNode g shapes body (g.size + 1) g.entry else none
+    (body : Nat → (Nat → Option (List Stmt)) → Option (List Stmt)) : Option (List Stmt) := do
+  guard (reducible g)
+  let inner ← emitNode g shapes body (g.size + 1) g.entry
+  pure (if isLoopHeader g g.entry then [shapes.loop (loopLabel g.entry) inner] else inner)
 
 end Structure
 

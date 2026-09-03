@@ -48,6 +48,18 @@ example : (emitWith selfLoop {} (body selfLoop)).map (Render.stmts house0 0) = s
    "  b2\n" ++
    "}\n") := by native_decide
 
+/-- 0 → 0, 0 → 1: the entry is its own loop header. -/
+def entryLoop : Graph :=
+  { size := 2, entry := 0, succs := fun n => match n with | 0 => [0, 1] | _ => [] }
+
+example : isLoopHeader entryLoop 0 = true := by native_decide
+example : (emitWith entryLoop {} (body entryLoop)).map (Render.stmts house0 0) = some
+  ("W0: while (true) {\n" ++
+   "  b0\n" ++
+   "  continue W0\n" ++
+   "  b1\n" ++
+   "}\n") := by native_decide
+
 /-- 0 → 1, 0 → 2, 1 → 2, 2 → 1: the cycle is entered at both nodes. -/
 def irreducible : Graph :=
   { size := 3, entry := 0, succs := fun n => match n with | 0 => [1, 2] | 1 => [2] | 2 => [1] | _ => [] }
