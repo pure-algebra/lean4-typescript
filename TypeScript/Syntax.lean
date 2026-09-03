@@ -121,6 +121,10 @@ inductive Stmt where
   /-- `const name = yield* Effect.scoped(Effect.onExit(Effect.gen(function* () { body }), onExit))`:
   a nested generator run in its own scope, its exit observed by `onExit`. -/
   | scopedGen (name : String) (body : List Stmt) (onExit : Expr)
+  /-- `const name = yield* Effect.uninterruptible(Effect.scoped(Effect.onExit(Effect.gen(function* () { body }), onExit)))`:
+  a scoped generator whose body runs with interruption masked; rc.112 defers a
+  pending interrupt to the moment the mask is restored. -/
+  | scopedGenMasked (name : String) (body : List Stmt) (onExit : Expr)
   /-- `break label` or plain `break`. -/
   | breakTo (label : Option String)
   /-- `continue label` or plain `continue`. -/
@@ -143,6 +147,7 @@ mutual
     | .ifElse c xs xs', .ifElse d ys ys' => c == d && beqStmtList xs ys && beqStmtList xs' ys'
     | .labelled l xs, .labelled m ys => l == m && beqStmtList xs ys
     | .scopedGen a xs x, .scopedGen b ys y => a == b && beqStmtList xs ys && x == y
+    | .scopedGenMasked a xs x, .scopedGenMasked b ys y => a == b && beqStmtList xs ys && x == y
     | .breakTo l, .breakTo m | .continueTo l, .continueTo m => l == m
     | _, _ => false
   termination_by structural self

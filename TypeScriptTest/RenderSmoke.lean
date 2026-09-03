@@ -53,7 +53,14 @@ example : Render.stmt house0 1 (.scopedGen "r7" [.ret (.ident "b2p1")]
   "    return b2p1\n" ++
   "  }), (exit) => regions.leave(7, exit)))" := by native_decide
 
+example : Render.stmt house0 1 (.scopedGenMasked "r7" [.ret (.ident "b2p1")]
+    (.lambda ["exit"] (.call (.ident "regions.leave") [.int 7, .ident "exit"]))) =
+  "  const r7 = yield* Effect.uninterruptible(Effect.scoped(Effect.onExit(Effect.gen(function* () {\n" ++
+  "    return b2p1\n" ++
+  "  }), (exit) => regions.leave(7, exit))))" := by native_decide
+
 example : (Stmt.scopedGen "r" [] (.ident "f") == Stmt.scopedGen "r" [] (.ident "f")) = true := by native_decide
+example : (Stmt.scopedGenMasked "r" [] (.ident "f") == Stmt.scopedGen "r" [] (.ident "f")) = false := by native_decide
 example : (Expr.method (.ident "a") "b" [] == Expr.method (.ident "a") "c" []) = false := by native_decide
 
 end TypeScriptTest

@@ -206,6 +206,11 @@ def stmt (style : Style) (depth : Nat) : Stmt → String
       " = yield* Effect.scoped(Effect.onExit(Effect.gen(function* () {\n" ++
       stmts style (depth + 1) body ++ indentOf style depth ++ "}), " ++
       expr style depth onExit ++ "))"
+  | .scopedGenMasked name body onExit =>
+    indentOf style depth ++ "const " ++ name ++
+      " = yield* Effect.uninterruptible(Effect.scoped(Effect.onExit(Effect.gen(function* () {\n" ++
+      stmts style (depth + 1) body ++ indentOf style depth ++ "}), " ++
+      expr style depth onExit ++ ")))"
   | .breakTo label =>
     indentOf style depth ++ "break" ++ (match label with | some l => " " ++ l | none => "")
   | .continueTo label =>
