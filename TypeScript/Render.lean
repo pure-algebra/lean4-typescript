@@ -143,6 +143,8 @@ def expr (style : Style) (depth : Nat) : Expr → String
   | .method target name args =>
     expr style depth target ++ "." ++ name ++ "(" ++
       String.intercalate ", " (exprs style depth args) ++ ")"
+  | .member target name =>
+    expr style depth target ++ "." ++ name
 
 def exprs (style : Style) (depth : Nat) : List Expr → List String
   | [] => []

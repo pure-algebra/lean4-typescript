@@ -63,4 +63,32 @@ example : (Stmt.scopedGen "r" [] (.ident "f") == Stmt.scopedGen "r" [] (.ident "
 example : (Stmt.scopedGenMasked "r" [] (.ident "f") == Stmt.scopedGen "r" [] (.ident "f")) = false := by native_decide
 example : (Expr.method (.ident "a") "b" [] == Expr.method (.ident "a") "c" []) = false := by native_decide
 
+/-- v0.4.3: a member of an expression. A generator that binds a `Result` reads
+its two edges this way, so the base stays a name the identifier profile can
+check and the dot is syntax. -/
+example : Render.expr house0 0 (.member (.ident "a4") "success") = "a4.success" := by native_decide
+
+example : Render.expr house0 0 (.member (.ident "a4") "failure") = "a4.failure" := by native_decide
+
+/-- It nests, and it composes with the call and method forms. -/
+example : Render.expr house0 0 (.member (.member (.ident "a") "b") "c") = "a.b.c" := by native_decide
+
+example : Render.expr house0 0
+    (.call (.ident "Result.isSuccess") [.member (.ident "a4") "success"]) =
+  "Result.isSuccess(a4.success)" := by native_decide
+
+example : Render.expr house0 0 (.member (.call (.ident "f") [.int 1]) "value") =
+  "f(1).value" := by native_decide
+
+example : Render.stmt house0 0 (.assign "b1p0" (.member (.ident "a4") "success")) =
+  "b1p0 = a4.success" := by native_decide
+
+/-- A member is not the method call of the same name, and the field is part of
+the identity. -/
+example : (Expr.member (.ident "a") "b" == Expr.member (.ident "a") "b") = true := by native_decide
+example : (Expr.member (.ident "a") "b" == Expr.member (.ident "a") "c") = false := by native_decide
+example : (Expr.member (.ident "a") "b" == Expr.member (.ident "z") "b") = false := by native_decide
+example : (Expr.member (.ident "a") "b" == Expr.method (.ident "a") "b" []) = false := by native_decide
+example : (Expr.member (.ident "a") "b" == Expr.ident "a.b") = false := by native_decide
+
 end TypeScriptTest

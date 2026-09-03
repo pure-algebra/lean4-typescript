@@ -47,6 +47,11 @@ inductive Expr where
   | lambda (params : List String) (body : Expr)
   /-- A method call on an expression, `target.name(args)`. -/
   | method (target : Expr) (name : String) (args : List Expr)
+  /-- A member of an expression, `target.name`. This is what a generator needs
+  when a value it bound is read through one of its fields; spelling it as an
+  `ident` would put a dot inside a name the identifier profile is supposed to
+  check. -/
+  | member (target : Expr) (name : String)
   deriving Inhabited
 
 -- Keep the existing equality API total. Lean's BEq deriving handler uses a
@@ -69,6 +74,7 @@ mutual
     | .generic f xs, .generic g ys => instBEqExpr.beq f g && xs == ys
     | .lambda ps a, .lambda qs b => ps == qs && instBEqExpr.beq a b
     | .method t n xs, .method u m ys => instBEqExpr.beq t u && n == m && beqExprList xs ys
+    | .member t n, .member u m => instBEqExpr.beq t u && n == m
     | _, _ => false
   termination_by structural self
 

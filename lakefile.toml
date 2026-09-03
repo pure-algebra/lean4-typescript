@@ -1,5 +1,5 @@
 name = "typescript"
-version = "0.4.2"
+version = "0.4.3"
 description = "TypeScript as a target: first-order syntax, deterministic rendering, the generated-identifier profile, and host pins. No knowledge of any effect system."
 license = "MIT"
 defaultTargets = ["TypeScript", "TypeScriptTest"]
