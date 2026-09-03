@@ -26,3 +26,18 @@ example : Render.decl house0 (.classDecl
   native_decide
 
 end TypeScriptTest
+
+namespace TypeScriptTest
+open TypeScript
+
+/-- The dispatch-loop shape a block graph lowers to. -/
+example : Render.stmt house0 1 (.whileTrue none
+    [ .switch (.ident "block")
+        [ (0, [ .assign "x" (.call (.ident "f") []), .assign "block" (.int 1), .continueTo none ])
+        , (1, [ .ifElse (.ident "ok") [ .ret (.ident "x") ] [ .breakTo (some "L") ] ]) ] ]) =
+    "  while (true) {\n    switch (block) {\n      case 0: {\n        x = f()\n        block = 1\n        continue\n      }\n      case 1: {\n        if (ok) {\n          return x\n        } else {\n          break L\n        }\n      }\n    }\n  }" := by
+  native_decide
+
+example : Render.stmt house0 0 (.letDefinite "b1p0" "number") = "let b1p0!: number" := by native_decide
+
+end TypeScriptTest

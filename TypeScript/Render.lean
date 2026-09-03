@@ -164,6 +164,10 @@ def constDecl (style : Style) (declaration : ConstDecl) : String :=
     (match declaration.type with | none => "" | some type => ": " ++ type) ++ " = " ++
     expr style 0 declaration.value ++ "\n"
 
+mutual
+
+/-- Statements render one per line at their depth; block bodies indent one
+level. Every layout choice is a function of the syntax and the style. -/
 def stmt (style : Style) (depth : Nat) : Stmt → String
   | .constYield name value =>
     indentOf style depth ++ "const " ++ name ++ " = yield* " ++
@@ -172,6 +176,47 @@ def stmt (style : Style) (depth : Nat) : Stmt → String
     indentOf style depth ++ "return " ++ expr style depth value
   | .yieldDiscard value =>
     indentOf style depth ++ "yield* " ++ expr style depth value
+  | .letDefinite name type =>
+    indentOf style depth ++ "let " ++ name ++ "!: " ++ type
+  | .letInit name value =>
+    indentOf style depth ++ "let " ++ name ++ " = " ++ expr style depth value
+  | .assign name value =>
+    indentOf style depth ++ name ++ " = " ++ expr style depth value
+  | .whileTrue label body =>
+    indentOf style depth ++ (match label with | some l => l ++ ": " | none => "") ++
+      "while (true) {\n" ++ stmts style (depth + 1) body ++ indentOf style depth ++ "}"
+  | .switch scrutinee cases =>
+    indentOf style depth ++ "switch (" ++ expr style depth scrutinee ++ ") {\n" ++
+      switchCases style (depth + 1) cases ++ indentOf style depth ++ "}"
+  | .ifElse condition thenBranch elseBranch =>
+    indentOf style depth ++ "if (" ++ expr style depth condition ++ ") {\n" ++
+      stmts style (depth + 1) thenBranch ++ indentOf style depth ++ "}" ++
+      (if elseBranch.isEmpty then ""
+       else " else {\n" ++ stmts style (depth + 1) elseBranch ++ indentOf style depth ++ "}")
+  | .labelled label body =>
+    indentOf style depth ++ label ++ ": {\n" ++ stmts style (depth + 1) body ++
+      indentOf style depth ++ "}"
+  | .breakTo label =>
+    indentOf style depth ++ "break" ++ (match label with | some l => " " ++ l | none => "")
+  | .continueTo label =>
+    indentOf style depth ++ "continue" ++ (match label with | some l => " " ++ l | none => "")
+  | .exprStmt value =>
+    indentOf style depth ++ expr style depth value
+
+/-- A statement list, each on its own line. -/
+def stmts (style : Style) (depth : Nat) : List Stmt → String
+  | [] => ""
+  | first :: rest => stmt style depth first ++ "\n" ++ stmts style depth rest
+
+/-- `case n: { body }` per case. -/
+def switchCases (style : Style) (depth : Nat) : List (Nat × List Stmt) → String
+  | [] => ""
+  | (index, body) :: rest =>
+    indentOf style depth ++ "case " ++ toString index ++ ": {\n" ++
+      stmts style (depth + 1) body ++ indentOf style depth ++ "}\n" ++
+      switchCases style depth rest
+
+end
 
 def classDecl (style : Style) (declaration : ClassDecl) : String :=
   docBlock declaration.doc ++ "export class " ++ declaration.name ++

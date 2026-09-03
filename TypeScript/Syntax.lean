@@ -87,7 +87,10 @@ end
 
 instance instBEqExpr : BEq Expr := ⟨instBEqExpr.beq⟩
 
-/-- One statement in the retained straight-line generator fragment. -/
+/-- One statement in the generator fragment. The first three are the
+straight-line forms; the rest carry block graphs: definite-assignment
+declarations, assignment, an unconditional loop, a selector switch, a
+conditional, and labelled control transfer. -/
 inductive Stmt where
   /-- `const name = yield* value`. -/
   | constYield (name : String) (value : Expr)
@@ -95,7 +98,65 @@ inductive Stmt where
   | ret (value : Expr)
   /-- `yield* value` with the answer discarded. -/
   | yieldDiscard (value : Expr)
-  deriving BEq
+  /-- `let name!: type` — declared, definitely assigned later. -/
+  | letDefinite (name : String) (type : String)
+  /-- `let name = value`. -/
+  | letInit (name : String) (value : Expr)
+  /-- `name = value`. -/
+  | assign (name : String) (value : Expr)
+  /-- `while (true) { body }`, optionally labelled. -/
+  | whileTrue (label : Option String) (body : List Stmt)
+  /-- `switch (scrutinee) { case n: { body } … }`. -/
+  | switch (scrutinee : Expr) (cases : List (Nat × List Stmt))
+  /-- `if (condition) { then } else { else }`; an empty else is omitted. -/
+  | ifElse (condition : Expr) (thenBranch elseBranch : List Stmt)
+  /-- `label: { body }`. -/
+  | labelled (label : String) (body : List Stmt)
+  /-- `break label` or plain `break`. -/
+  | breakTo (label : Option String)
+  /-- `continue label` or plain `continue`. -/
+  | continueTo (label : Option String)
+  /-- `value` as a statement. -/
+  | exprStmt (value : Expr)
+
+-- `Stmt` is a nested inductive (statement lists inside statements); Lean's
+-- `BEq` deriving handler uses a partial helper for it, so equality is a total
+-- structural recursion here.
+mutual
+  def instBEqStmt.beq (self other : Stmt) : Bool :=
+    match self, other with
+    | .constYield a x, .constYield b y => a == b && x == y
+    | .ret x, .ret y | .yieldDiscard x, .yieldDiscard y | .exprStmt x, .exprStmt y => x == y
+    | .letDefinite a t, .letDefinite b u => a == b && t == u
+    | .letInit a x, .letInit b y | .assign a x, .assign b y => a == b && x == y
+    | .whileTrue l xs, .whileTrue m ys => l == m && beqStmtList xs ys
+    | .switch x cs, .switch y ds => x == y && beqStmtCases cs ds
+    | .ifElse c xs xs', .ifElse d ys ys' => c == d && beqStmtList xs ys && beqStmtList xs' ys'
+    | .labelled l xs, .labelled m ys => l == m && beqStmtList xs ys
+    | .breakTo l, .breakTo m | .continueTo l, .continueTo m => l == m
+    | _, _ => false
+  termination_by structural self
+
+  private def beqStmtList (self other : List Stmt) : Bool :=
+    match self, other with
+    | [], [] => true
+    | a :: xs, b :: ys => instBEqStmt.beq a b && beqStmtList xs ys
+    | _, _ => false
+  termination_by structural self
+
+  private def beqStmtCases (self other : List (Nat × List Stmt)) : Bool :=
+    match self, other with
+    | [], [] => true
+    | a :: xs, b :: ys => beqStmtCase a b && beqStmtCases xs ys
+    | _, _ => false
+  termination_by structural self
+
+  private def beqStmtCase (self other : Nat × List Stmt) : Bool :=
+    self.1 == other.1 && beqStmtList self.2 other.2
+  termination_by structural self
+end
+
+instance instBEqStmt : BEq Stmt := ⟨instBEqStmt.beq⟩
 
 /-- An exported constant declaration with an optional target type spelling. -/
 structure ConstDecl where
