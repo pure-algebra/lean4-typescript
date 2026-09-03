@@ -40,4 +40,20 @@ example : Render.stmt house0 1 (.whileTrue none
 
 example : Render.stmt house0 0 (.letDefinite "b1p0" "number") = "let b1p0!: number" := by native_decide
 
+/-- v0.3.0: a named-parameter arrow and a method call. -/
+example : Render.expr house0 0 (.lambda ["a", "exit"]
+    (.method (.call (.ident "regions.finalizer") [.int 7, .ident "exit"]) "pipe"
+      [.call (.ident "Effect.andThen") [.call (.ident "cell.release") [.ident "a"]]])) =
+  "(a, exit) => regions.finalizer(7, exit).pipe(Effect.andThen(cell.release(a)))" := by native_decide
+
+/-- v0.3.0: a scoped nested generator whose exit is observed. -/
+example : Render.stmt house0 1 (.scopedGen "r7" [.ret (.ident "b2p1")]
+    (.lambda ["exit"] (.call (.ident "regions.leave") [.int 7, .ident "exit"]))) =
+  "  const r7 = yield* Effect.scoped(Effect.onExit(Effect.gen(function* () {\n" ++
+  "    return b2p1\n" ++
+  "  }), (exit) => regions.leave(7, exit)))" := by native_decide
+
+example : (Stmt.scopedGen "r" [] (.ident "f") == Stmt.scopedGen "r" [] (.ident "f")) = true := by native_decide
+example : (Expr.method (.ident "a") "b" [] == Expr.method (.ident "a") "c" []) = false := by native_decide
+
 end TypeScriptTest

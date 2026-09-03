@@ -43,6 +43,10 @@ inductive Expr where
   /-- A reference applied to explicit type arguments, `fn<T1, T2>`. Type
   arguments are target type spellings. -/
   | generic (fn : Expr) (typeArgs : List String)
+  /-- A named-parameter arrow with an expression body, `(a, exit) => body`. -/
+  | lambda (params : List String) (body : Expr)
+  /-- A method call on an expression, `target.name(args)`. -/
+  | method (target : Expr) (name : String) (args : List Expr)
   deriving Inhabited
 
 -- Keep the existing equality API total. Lean's BEq deriving handler uses a
@@ -63,6 +67,8 @@ mutual
     | .arr xs, .arr ys => beqExprList xs ys
     | .arrow ty a, .arrow ty' b => ty == ty' && instBEqExpr.beq a b
     | .generic f xs, .generic g ys => instBEqExpr.beq f g && xs == ys
+    | .lambda ps a, .lambda qs b => ps == qs && instBEqExpr.beq a b
+    | .method t n xs, .method u m ys => instBEqExpr.beq t u && n == m && beqExprList xs ys
     | _, _ => false
   termination_by structural self
 
@@ -112,6 +118,9 @@ inductive Stmt where
   | ifElse (condition : Expr) (thenBranch elseBranch : List Stmt)
   /-- `label: { body }`. -/
   | labelled (label : String) (body : List Stmt)
+  /-- `const name = yield* Effect.scoped(Effect.onExit(Effect.gen(function* () { body }), onExit))`:
+  a nested generator run in its own scope, its exit observed by `onExit`. -/
+  | scopedGen (name : String) (body : List Stmt) (onExit : Expr)
   /-- `break label` or plain `break`. -/
   | breakTo (label : Option String)
   /-- `continue label` or plain `continue`. -/
@@ -133,6 +142,7 @@ mutual
     | .switch x cs, .switch y ds => x == y && beqStmtCases cs ds
     | .ifElse c xs xs', .ifElse d ys ys' => c == d && beqStmtList xs ys && beqStmtList xs' ys'
     | .labelled l xs, .labelled m ys => l == m && beqStmtList xs ys
+    | .scopedGen a xs x, .scopedGen b ys y => a == b && beqStmtList xs ys && x == y
     | .breakTo l, .breakTo m | .continueTo l, .continueTo m => l == m
     | _, _ => false
   termination_by structural self

@@ -138,6 +138,11 @@ def expr (style : Style) (depth : Nat) : Expr → String
       " => " ++ expr style depth body
   | .generic fn typeArgs =>
     expr style depth fn ++ "<" ++ String.intercalate ", " typeArgs ++ ">"
+  | .lambda params body =>
+    "(" ++ String.intercalate ", " params ++ ") => " ++ expr style depth body
+  | .method target name args =>
+    expr style depth target ++ "." ++ name ++ "(" ++
+      String.intercalate ", " (exprs style depth args) ++ ")"
 
 def exprs (style : Style) (depth : Nat) : List Expr → List String
   | [] => []
@@ -196,6 +201,11 @@ def stmt (style : Style) (depth : Nat) : Stmt → String
   | .labelled label body =>
     indentOf style depth ++ label ++ ": {\n" ++ stmts style (depth + 1) body ++
       indentOf style depth ++ "}"
+  | .scopedGen name body onExit =>
+    indentOf style depth ++ "const " ++ name ++
+      " = yield* Effect.scoped(Effect.onExit(Effect.gen(function* () {\n" ++
+      stmts style (depth + 1) body ++ indentOf style depth ++ "}), " ++
+      expr style depth onExit ++ "))"
   | .breakTo label =>
     indentOf style depth ++ "break" ++ (match label with | some l => " " ++ l | none => "")
   | .continueTo label =>
