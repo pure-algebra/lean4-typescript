@@ -13,9 +13,14 @@ program.
 
 namespace TypeScript
 
+mutual
 /-- Expressions in the retained target fragment. Names and optional type
 annotations are target spellings; later typed lowering is responsible for
-constructing them from checked Effect4 content. -/
+constructing them from checked Effect4 content.
+
+`Expr` and `Stmt` are one mutual inductive since v0.5.0: an expression may
+carry a statement block (`generator`, `arrowBlock`) and a statement carries
+expressions, so neither can be declared first. -/
 inductive Expr where
   /-- A possibly qualified target reference, such as `Schema.Struct`. -/
   | ident (name : String)
@@ -52,52 +57,14 @@ inductive Expr where
   `ident` would put a dot inside a name the identifier profile is supposed to
   check. -/
   | member (target : Expr) (name : String)
-  deriving Inhabited
-
--- Keep the existing equality API total. Lean's BEq deriving handler uses a
--- partial helper for nested inductives; these four structural recursions
--- traverse the expression and its nested lists without that trust boundary.
-mutual
-  def instBEqExpr.beq (self other : Expr) : Bool :=
-    match self, other with
-    | .ident a, .ident b | .str a, .str b => a == b
-    | .int a, .int b => a == b
-    | .float64Bits a, .float64Bits b => a == b
-    | .bool a, .bool b => a == b
-    | .jsNull, .jsNull => true
-    | .call f xs, .call g ys => instBEqExpr.beq f g && beqExprList xs ys
-    | .object xs, .object ys | .objectML xs, .objectML ys
-    | .objectQuoted xs, .objectQuoted ys | .objectQuotedML xs, .objectQuotedML ys
-    | .objectFromEntries xs, .objectFromEntries ys => beqExprFields xs ys
-    | .arr xs, .arr ys => beqExprList xs ys
-    | .arrow ty a, .arrow ty' b => ty == ty' && instBEqExpr.beq a b
-    | .generic f xs, .generic g ys => instBEqExpr.beq f g && xs == ys
-    | .lambda ps a, .lambda qs b => ps == qs && instBEqExpr.beq a b
-    | .method t n xs, .method u m ys => instBEqExpr.beq t u && n == m && beqExprList xs ys
-    | .member t n, .member u m => instBEqExpr.beq t u && n == m
-    | _, _ => false
-  termination_by structural self
-
-  private def beqExprList (self other : List Expr) : Bool :=
-    match self, other with
-    | [], [] => true
-    | a :: xs, b :: ys => instBEqExpr.beq a b && beqExprList xs ys
-    | _, _ => false
-  termination_by structural self
-
-  private def beqExprFields (self other : List (String × Expr)) : Bool :=
-    match self, other with
-    | [], [] => true
-    | a :: xs, b :: ys => beqExprField a b && beqExprFields xs ys
-    | _, _ => false
-  termination_by structural self
-
-  private def beqExprField (self other : String × Expr) : Bool :=
-    self.1 == other.1 && instBEqExpr.beq self.2 other.2
-  termination_by structural self
-end
-
-instance instBEqExpr : BEq Expr := ⟨instBEqExpr.beq⟩
+  /-- v0.5.0: a generator function expression, `function* () { body }`. This
+  is what `Effect.gen` takes; the body is the statement fragment. -/
+  | generator (body : List Stmt)
+  /-- v0.5.0: a conditional expression, `test ? thenBranch : elseBranch`. -/
+  | cond (test thenBranch elseBranch : Expr)
+  /-- v0.5.0: a named-parameter arrow with a block body, `(a) => { body }`.
+  Zero parameters render `() => { body }`. -/
+  | arrowBlock (params : List String) (body : List Stmt)
 
 /-- One statement in the generator fragment. The first three are the
 straight-line forms; the rest carry block graphs: definite-assignment
@@ -137,46 +104,98 @@ inductive Stmt where
   | continueTo (label : Option String)
   /-- `value` as a statement. -/
   | exprStmt (value : Expr)
+end
 
--- `Stmt` is a nested inductive (statement lists inside statements); Lean's
--- `BEq` deriving handler uses a partial helper for it, so equality is a total
--- structural recursion here.
+instance : Inhabited Expr := ⟨.ident ""⟩
+instance : Inhabited Stmt := ⟨.breakTo none⟩
+
+-- Keep the existing equality API total. Lean's BEq deriving handler uses a
+-- partial helper for nested inductives; these structural recursions traverse
+-- the expression, the statement, and their nested lists without that trust
+-- boundary.
 mutual
+  def instBEqExpr.beq (self other : Expr) : Bool :=
+    match self, other with
+    | .ident a, .ident b | .str a, .str b => a == b
+    | .int a, .int b => a == b
+    | .float64Bits a, .float64Bits b => a == b
+    | .bool a, .bool b => a == b
+    | .jsNull, .jsNull => true
+    | .call f xs, .call g ys => instBEqExpr.beq f g && beqExprList xs ys
+    | .object xs, .object ys | .objectML xs, .objectML ys
+    | .objectQuoted xs, .objectQuoted ys | .objectQuotedML xs, .objectQuotedML ys
+    | .objectFromEntries xs, .objectFromEntries ys => beqExprFields xs ys
+    | .arr xs, .arr ys => beqExprList xs ys
+    | .arrow ty a, .arrow ty' b => ty == ty' && instBEqExpr.beq a b
+    | .generic f xs, .generic g ys => instBEqExpr.beq f g && xs == ys
+    | .lambda ps a, .lambda qs b => ps == qs && instBEqExpr.beq a b
+    | .method t n xs, .method u m ys => instBEqExpr.beq t u && n == m && beqExprList xs ys
+    | .member t n, .member u m => instBEqExpr.beq t u && n == m
+    | .generator xs, .generator ys => beqStmtList xs ys
+    | .cond t a b, .cond u c d =>
+      instBEqExpr.beq t u && instBEqExpr.beq a c && instBEqExpr.beq b d
+    | .arrowBlock ps xs, .arrowBlock qs ys => ps == qs && beqStmtList xs ys
+    | _, _ => false
+  termination_by structural self
+
+  def beqExprList (self other : List Expr) : Bool :=
+    match self, other with
+    | [], [] => true
+    | a :: xs, b :: ys => instBEqExpr.beq a b && beqExprList xs ys
+    | _, _ => false
+  termination_by structural self
+
+  def beqExprFields (self other : List (String × Expr)) : Bool :=
+    match self, other with
+    | [], [] => true
+    | a :: xs, b :: ys => beqExprField a b && beqExprFields xs ys
+    | _, _ => false
+  termination_by structural self
+
+  def beqExprField (self other : String × Expr) : Bool :=
+    self.1 == other.1 && instBEqExpr.beq self.2 other.2
+  termination_by structural self
+
   def instBEqStmt.beq (self other : Stmt) : Bool :=
     match self, other with
-    | .constYield a x, .constYield b y => a == b && x == y
-    | .ret x, .ret y | .yieldDiscard x, .yieldDiscard y | .exprStmt x, .exprStmt y => x == y
+    | .constYield a x, .constYield b y => a == b && instBEqExpr.beq x y
+    | .ret x, .ret y | .yieldDiscard x, .yieldDiscard y | .exprStmt x, .exprStmt y =>
+      instBEqExpr.beq x y
     | .letDefinite a t, .letDefinite b u => a == b && t == u
-    | .letInit a x, .letInit b y | .assign a x, .assign b y => a == b && x == y
+    | .letInit a x, .letInit b y | .assign a x, .assign b y => a == b && instBEqExpr.beq x y
     | .whileTrue l xs, .whileTrue m ys => l == m && beqStmtList xs ys
-    | .switch x cs, .switch y ds => x == y && beqStmtCases cs ds
-    | .ifElse c xs xs', .ifElse d ys ys' => c == d && beqStmtList xs ys && beqStmtList xs' ys'
+    | .switch x cs, .switch y ds => instBEqExpr.beq x y && beqStmtCases cs ds
+    | .ifElse c xs xs', .ifElse d ys ys' =>
+      instBEqExpr.beq c d && beqStmtList xs ys && beqStmtList xs' ys'
     | .labelled l xs, .labelled m ys => l == m && beqStmtList xs ys
-    | .scopedGen a xs x, .scopedGen b ys y => a == b && beqStmtList xs ys && x == y
-    | .scopedGenMasked a xs x, .scopedGenMasked b ys y => a == b && beqStmtList xs ys && x == y
+    | .scopedGen a xs x, .scopedGen b ys y =>
+      a == b && beqStmtList xs ys && instBEqExpr.beq x y
+    | .scopedGenMasked a xs x, .scopedGenMasked b ys y =>
+      a == b && beqStmtList xs ys && instBEqExpr.beq x y
     | .breakTo l, .breakTo m | .continueTo l, .continueTo m => l == m
     | _, _ => false
   termination_by structural self
 
-  private def beqStmtList (self other : List Stmt) : Bool :=
+  def beqStmtList (self other : List Stmt) : Bool :=
     match self, other with
     | [], [] => true
     | a :: xs, b :: ys => instBEqStmt.beq a b && beqStmtList xs ys
     | _, _ => false
   termination_by structural self
 
-  private def beqStmtCases (self other : List (Nat × List Stmt)) : Bool :=
+  def beqStmtCases (self other : List (Nat × List Stmt)) : Bool :=
     match self, other with
     | [], [] => true
     | a :: xs, b :: ys => beqStmtCase a b && beqStmtCases xs ys
     | _, _ => false
   termination_by structural self
 
-  private def beqStmtCase (self other : Nat × List Stmt) : Bool :=
+  def beqStmtCase (self other : Nat × List Stmt) : Bool :=
     self.1 == other.1 && beqStmtList self.2 other.2
   termination_by structural self
 end
 
+instance instBEqExpr : BEq Expr := ⟨instBEqExpr.beq⟩
 instance instBEqStmt : BEq Stmt := ⟨instBEqStmt.beq⟩
 
 /-- An exported constant declaration with an optional target type spelling. -/

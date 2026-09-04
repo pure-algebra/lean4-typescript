@@ -92,3 +92,39 @@ example : (Expr.member (.ident "a") "b" == Expr.method (.ident "a") "b" []) = fa
 example : (Expr.member (.ident "a") "b" == Expr.ident "a.b") = false := by native_decide
 
 end TypeScriptTest
+
+namespace TypeScriptTest
+open TypeScript
+
+/-- v0.5.0: a generator expression is what `Effect.gen` takes; its body is the
+statement fragment, one statement per line, closed at the caller's depth. -/
+example : Render.expr house0 0 (.call (.ident "Effect.gen")
+    [.generator [.constYield "a0" (.call (.ident "Ref.get") [.ident "a0"]), .ret (.ident "a0")]]) =
+    "Effect.gen(function* () {\n  const a0 = yield* Ref.get(a0)\n  return a0\n})" := by
+  native_decide
+
+example : Render.expr house0 0 (.call (.ident "Effect.gen") [.generator []]) =
+    "Effect.gen(function* () {\n})" := by native_decide
+
+/-- v0.5.0: a conditional expression. -/
+example : Render.expr house0 0 (.cond (.bool true) (.int 1) (.ident "undefined")) =
+    "true ? 1 : undefined" := by native_decide
+
+/-- v0.5.0: an arrow with a block body, nested inside an object so the object
+goes multiline and every depth is exercised. -/
+example : Render.expr house0 0 (.call (.ident "Effect.suspend")
+    [ .arrowBlock []
+        [ .letInit "a0" (.int 0)
+        , .ret (.call (.ident "Effect.whileLoop")
+            [ .object
+                [ ("while", .arrow none (.ident "a0"))
+                , ("step", .arrowBlock ["a1"] [.assign "a0" (.call (.ident "succ") [.ident "a1"])]) ] ]) ] ]) =
+    "Effect.suspend(() => {\n  let a0 = 0\n  return Effect.whileLoop({\n    while: () => a0,\n    step: (a1) => {\n      a0 = succ(a1)\n    },\n  })\n})" := by
+  native_decide
+
+/-- Equality reaches the new formers. -/
+example : (Expr.generator [.ret (.int 1)] == Expr.generator [.ret (.int 1)]) = true := by native_decide
+example : (Expr.generator [.ret (.int 1)] == Expr.generator [.ret (.int 2)]) = false := by native_decide
+example : (Expr.arrowBlock ["a"] [] == Expr.arrowBlock ["b"] []) = false := by native_decide
+
+end TypeScriptTest

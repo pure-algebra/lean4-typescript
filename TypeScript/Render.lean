@@ -145,6 +145,14 @@ def expr (style : Style) (depth : Nat) : Expr → String
       String.intercalate ", " (exprs style depth args) ++ ")"
   | .member target name =>
     expr style depth target ++ "." ++ name
+  | .generator body =>
+    "function* () {\n" ++ stmts style (depth + 1) body ++ indentOf style depth ++ "}"
+  | .cond test thenBranch elseBranch =>
+    expr style depth test ++ " ? " ++ expr style depth thenBranch ++ " : " ++
+      expr style depth elseBranch
+  | .arrowBlock params body =>
+    "(" ++ String.intercalate ", " params ++ ") => {\n" ++
+      stmts style (depth + 1) body ++ indentOf style depth ++ "}"
 
 def exprs (style : Style) (depth : Nat) : List Expr → List String
   | [] => []
@@ -155,23 +163,6 @@ def objectFields (style : Style) (depth : Nat) :
   | [] => []
   | (name, value) :: rest =>
     (name, expr style depth value) :: objectFields style depth rest
-
-end
-
-def docBlock (lines : List String) : String :=
-  match lines with
-  | [] => ""
-  | [one] => "/** " ++ one ++ " */\n"
-  | first :: rest =>
-    "/** " ++ first ++ "\n" ++
-      String.intercalate "\n" (rest.map (" * " ++ ·)) ++ " */\n"
-
-def constDecl (style : Style) (declaration : ConstDecl) : String :=
-  docBlock declaration.doc ++ "export const " ++ declaration.name ++
-    (match declaration.type with | none => "" | some type => ": " ++ type) ++ " = " ++
-    expr style 0 declaration.value ++ "\n"
-
-mutual
 
 /-- Statements render one per line at their depth; block bodies indent one
 level. Every layout choice is a function of the syntax and the style. -/
@@ -234,6 +225,19 @@ def switchCases (style : Style) (depth : Nat) : List (Nat × List Stmt) → Stri
       switchCases style depth rest
 
 end
+
+def docBlock (lines : List String) : String :=
+  match lines with
+  | [] => ""
+  | [one] => "/** " ++ one ++ " */\n"
+  | first :: rest =>
+    "/** " ++ first ++ "\n" ++
+      String.intercalate "\n" (rest.map (" * " ++ ·)) ++ " */\n"
+
+def constDecl (style : Style) (declaration : ConstDecl) : String :=
+  docBlock declaration.doc ++ "export const " ++ declaration.name ++
+    (match declaration.type with | none => "" | some type => ": " ++ type) ++ " = " ++
+    expr style 0 declaration.value ++ "\n"
 
 def classDecl (style : Style) (declaration : ClassDecl) : String :=
   docBlock declaration.doc ++ "export class " ++ declaration.name ++
