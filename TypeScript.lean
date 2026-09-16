@@ -1,3 +1,4 @@
+import TypeScript.TypeRef
 import TypeScript.Syntax
 import TypeScript.Render
 import TypeScript.Identifier
@@ -12,5 +13,5 @@ its deterministic fixed-layout renderer, the generated-identifier profile,
 and host pins. This package knows nothing about effects; lean4-effect4 and
 lean4-whatwg require it and add their own idioms on top. Syntax and renderer
 carry their lean4-effect4 history (`Effect4/Target/TypeScript/{Expr,Render}.lean`
-at `de3e2ec`); the only edits are the namespace lines.
+at `de3e2ec`). Structural type and source-binding data extend that retained fragment.
 -/

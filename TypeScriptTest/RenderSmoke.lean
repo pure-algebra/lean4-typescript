@@ -21,7 +21,7 @@ open TypeScript
 
 example : Render.decl house0 (.classDecl
     { doc := [], name := "Cell",
-      heritage := some (.call (.call (.generic (.ident "Context.Service") ["Cell", "{ readonly get: () => Effect.Effect<number> }"]) []) [.str "Cell"]) }) =
+      heritage := some (.call (.call (.generic (.ident "Context.Service") [.name ["Cell"] [], .object [("get", true, .function [] (.name ["Effect", "Effect"] [.name ["number"] []]))]]) []) [.str "Cell"]) }) =
     "export class Cell extends Context.Service<Cell, { readonly get: () => Effect.Effect<number> }>()(\"Cell\") {}\n" := by
   native_decide
 
@@ -38,7 +38,7 @@ example : Render.stmt house0 1 (.whileTrue none
     "  while (true) {\n    switch (block) {\n      case 0: {\n        x = f()\n        block = 1\n        continue\n      }\n      case 1: {\n        if (ok) {\n          return x\n        } else {\n          break L\n        }\n      }\n    }\n  }" := by
   native_decide
 
-example : Render.stmt house0 0 (.letDefinite "b1p0" "number") = "let b1p0!: number" := by native_decide
+example : Render.stmt house0 0 (.letDefinite "b1p0" (.name ["number"] [])) = "let b1p0!: number" := by native_decide
 
 /-- v0.3.0: a named-parameter arrow and a method call. -/
 example : Render.expr house0 0 (.lambda ["a", "exit"]

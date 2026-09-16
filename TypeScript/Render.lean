@@ -1,4 +1,5 @@
 import TypeScript.Syntax
+import TypeScript.Identifier
 
 /-!
 # TypeScript.Render
@@ -40,6 +41,63 @@ def escapeString (style : Style) (s : String) : String :=
 def quoted (style : Style) (s : String) : String :=
   String.singleton style.quote ++ escapeString style s ++
     String.singleton style.quote
+
+mutual
+
+/-- Render a structural target type. Qualified names are joined segment by
+segment; there is no raw-type alternative. A function in a union is grouped so
+its result does not absorb the other union members. -/
+def type (style : Style) : TypeRef → String
+  | .name qualified args =>
+    String.intercalate "." qualified ++
+      (if args.isEmpty then ""
+       else "<" ++ String.intercalate ", " (types style args) ++ ">")
+  | .literal value => quoted style value
+  | .tuple items readonly =>
+    (if readonly then "readonly " else "") ++
+      "[" ++ String.intercalate ", " (types style items) ++ "]"
+  | .union members =>
+    if members.isEmpty then "never"
+    else String.intercalate " | " (unionTypes style members)
+  | .object fields =>
+    if fields.isEmpty then "{}"
+    else "{ " ++ String.intercalate "; " (typeFields style fields) ++ " }"
+  | .function params result =>
+    "(" ++ String.intercalate ", " (typeParams style params) ++ ") => " ++
+      type style result
+
+def types (style : Style) : List TypeRef → List String
+  | [] => []
+  | item :: rest => type style item :: types style rest
+
+def unionTypes (style : Style) : List TypeRef → List String
+  | [] => []
+  | item :: rest =>
+    (match item with
+     | .function _ _ => "(" ++ type style item ++ ")"
+     | _ => type style item) :: unionTypes style rest
+
+def typeFields (style : Style) : List (String × Bool × TypeRef) → List String
+  | [] => []
+  | (name, readonly, value) :: rest =>
+    ((if readonly then "readonly " else "") ++
+      (if targetIdentifier name then name else quoted style name) ++ ": " ++
+      type style value) :: typeFields style rest
+
+def typeParams (style : Style) : List (String × TypeRef) → List String
+  | [] => []
+  | (name, value) :: rest =>
+    (name ++ ": " ++ type style value) :: typeParams style rest
+
+end
+
+/-- The optional `: T` suffix shared by declarations and binders. -/
+def annotation (style : Style) : Option TypeRef → String
+  | none => ""
+  | some value => ": " ++ type style value
+
+def parameter (style : Style) (param : Parameter) : String :=
+  param.name ++ annotation style param.type
 
 /-- One byte of a 64-bit word, counted from the least-significant end. -/
 private def byteAt (bits : UInt64) (index : Nat) : Nat :=
@@ -134,12 +192,12 @@ def expr (style : Style) (depth : Nat) : Expr → String
               indentOf style (depth + 1) ++ item ++ ",") ++
           "\n" ++ indentOf style depth ++ "]"
   | .arrow returnType body =>
-    "()" ++ (match returnType with | none => "" | some type => ": " ++ type) ++
-      " => " ++ expr style depth body
+    "()" ++ annotation style returnType ++ " => " ++ expr style depth body
   | .generic fn typeArgs =>
-    expr style depth fn ++ "<" ++ String.intercalate ", " typeArgs ++ ">"
-  | .lambda params body =>
-    "(" ++ String.intercalate ", " params ++ ") => " ++ expr style depth body
+    expr style depth fn ++ "<" ++ String.intercalate ", " (types style typeArgs) ++ ">"
+  | .lambda params body returnType =>
+    "(" ++ String.intercalate ", " (params.map (parameter style)) ++ ")" ++
+      annotation style returnType ++ " => " ++ expr style depth body
   | .method target name args =>
     expr style depth target ++ "." ++ name ++ "(" ++
       String.intercalate ", " (exprs style depth args) ++ ")"
@@ -150,8 +208,9 @@ def expr (style : Style) (depth : Nat) : Expr → String
   | .cond test thenBranch elseBranch =>
     expr style depth test ++ " ? " ++ expr style depth thenBranch ++ " : " ++
       expr style depth elseBranch
-  | .arrowBlock params body =>
-    "(" ++ String.intercalate ", " params ++ ") => {\n" ++
+  | .arrowBlock params body returnType =>
+    "(" ++ String.intercalate ", " (params.map (parameter style)) ++ ")" ++
+      annotation style returnType ++ " => {\n" ++
       stmts style (depth + 1) body ++ indentOf style depth ++ "}"
 
 def exprs (style : Style) (depth : Nat) : List Expr → List String
@@ -167,17 +226,18 @@ def objectFields (style : Style) (depth : Nat) :
 /-- Statements render one per line at their depth; block bodies indent one
 level. Every layout choice is a function of the syntax and the style. -/
 def stmt (style : Style) (depth : Nat) : Stmt → String
-  | .constYield name value =>
-    indentOf style depth ++ "const " ++ name ++ " = yield* " ++
+  | .constYield name value declaredType =>
+    indentOf style depth ++ "const " ++ name ++ annotation style declaredType ++ " = yield* " ++
       expr style depth value
   | .ret value =>
     indentOf style depth ++ "return " ++ expr style depth value
   | .yieldDiscard value =>
     indentOf style depth ++ "yield* " ++ expr style depth value
-  | .letDefinite name type =>
-    indentOf style depth ++ "let " ++ name ++ "!: " ++ type
-  | .letInit name value =>
-    indentOf style depth ++ "let " ++ name ++ " = " ++ expr style depth value
+  | .letDefinite name declaredType =>
+    indentOf style depth ++ "let " ++ name ++ "!: " ++ type style declaredType
+  | .letInit name value declaredType =>
+    indentOf style depth ++ "let " ++ name ++ annotation style declaredType ++
+      " = " ++ expr style depth value
   | .assign name value =>
     indentOf style depth ++ name ++ " = " ++ expr style depth value
   | .whileTrue label body =>
@@ -235,12 +295,13 @@ def docBlock (lines : List String) : String :=
       String.intercalate "\n" (rest.map (" * " ++ ·)) ++ " */\n"
 
 def constDecl (style : Style) (declaration : ConstDecl) : String :=
-  docBlock declaration.doc ++ "export const " ++ declaration.name ++
-    (match declaration.type with | none => "" | some type => ": " ++ type) ++ " = " ++
+  docBlock declaration.doc ++ (if declaration.exported then "export " else "") ++
+    "const " ++ declaration.name ++ annotation style declaration.type ++ " = " ++
     expr style 0 declaration.value ++ "\n"
 
 def classDecl (style : Style) (declaration : ClassDecl) : String :=
-  docBlock declaration.doc ++ "export class " ++ declaration.name ++
+  docBlock declaration.doc ++ (if declaration.exported then "export " else "") ++
+    "class " ++ declaration.name ++
     (match declaration.heritage with
      | none => ""
      | some heritage => " extends " ++ expr style 0 heritage) ++
@@ -250,8 +311,9 @@ def classDecl (style : Style) (declaration : ClassDecl) : String :=
        "\n}\n")
 
 def progDecl (style : Style) (declaration : ProgDecl) : String :=
-  docBlock declaration.doc ++ "export const " ++ declaration.name ++ " = (" ++
-    declaration.paramName ++ ": " ++ declaration.paramType ++ ") =>\n" ++
+  docBlock declaration.doc ++ (if declaration.exported then "export " else "") ++
+    "const " ++ declaration.name ++ " = (" ++
+    declaration.paramName ++ ": " ++ type style declaration.paramType ++ ") =>\n" ++
     indentOf style 1 ++ "Effect.gen(function* () {\n" ++
     String.intercalate "\n" (declaration.stmts.map (stmt style 2)) ++ "\n" ++
     indentOf style 1 ++ "})\n"
@@ -319,14 +381,20 @@ def decl (style : Style) : Decl → String
   | .classDecl declaration => classDecl style declaration
   | .raw text => text ++ "\n"
 
+/-- A declaration-level type import already marks all its bindings as types;
+avoid the invalid redundant `import type { type T }` spelling. -/
+def importBinding (declarationTypeOnly : Bool) (binding : ImportBinding) : String :=
+  (if binding.typeOnly && !declarationTypeOnly then "type " else "") ++
+    binding.imported ++
+    (if binding.imported == binding.localName then "" else " as " ++ binding.localName)
+
 def import_ (style : Style) : Import → String
-  | .all name path =>
-    "import * as " ++ name ++ " from " ++ quoted style path ++ "\n"
-  | .named names path =>
-    "import { " ++ String.intercalate ", " names ++ " } from " ++
-      quoted style path ++ "\n"
-  | .types names path =>
-    "import type { " ++ String.intercalate ", " names ++ " } from " ++
+  | .all name path typeOnly =>
+    "import " ++ (if typeOnly then "type " else "") ++
+      "* as " ++ name ++ " from " ++ quoted style path ++ "\n"
+  | .named bindings path typeOnly =>
+    "import " ++ (if typeOnly then "type " else "") ++ "{ " ++
+      String.intercalate ", " (bindings.map (importBinding typeOnly)) ++ " } from " ++
       quoted style path ++ "\n"
 
 /-- Render a complete module with a header block, imports, and one blank line

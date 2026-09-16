@@ -1,3 +1,5 @@
+import TypeScript.TypeRef
+
 /-!
 # TypeScript.Syntax
 
@@ -13,9 +15,18 @@ program.
 
 namespace TypeScript
 
+/-- A named parameter with an optional structural type annotation. -/
+structure Parameter where
+  name : String
+  type : Option TypeRef := none
+  deriving BEq, DecidableEq
+
+/-- A plain name coerces only to an unannotated parameter, never to a type. -/
+instance : Coe String Parameter := ⟨fun name => { name }⟩
+
 mutual
 /-- Expressions in the retained target fragment. Names and optional type
-annotations are target spellings; later typed lowering is responsible for
+annotations are structured target data; later typed lowering is responsible for
 constructing them from checked Effect4 content.
 
 `Expr` and `Stmt` are one mutual inductive since v0.5.0: an expression may
@@ -44,12 +55,12 @@ inductive Expr where
   | objectFromEntries (fields : List (String × Expr))
   | arr (items : List Expr)
   /-- A zero-parameter arrow with an optional declared result type. -/
-  | arrow (returnType : Option String) (body : Expr)
+  | arrow (returnType : Option TypeRef) (body : Expr)
   /-- A reference applied to explicit type arguments, `fn<T1, T2>`. Type
-  arguments are target type spellings. -/
-  | generic (fn : Expr) (typeArgs : List String)
+  arguments are structural type syntax. -/
+  | generic (fn : Expr) (typeArgs : List TypeRef)
   /-- A named-parameter arrow with an expression body, `(a, exit) => body`. -/
-  | lambda (params : List String) (body : Expr)
+  | lambda (params : List Parameter) (body : Expr) (returnType : Option TypeRef := none)
   /-- A method call on an expression, `target.name(args)`. -/
   | method (target : Expr) (name : String) (args : List Expr)
   /-- A member of an expression, `target.name`. This is what a generator needs
@@ -64,7 +75,7 @@ inductive Expr where
   | cond (test thenBranch elseBranch : Expr)
   /-- v0.5.0: a named-parameter arrow with a block body, `(a) => { body }`.
   Zero parameters render `() => { body }`. -/
-  | arrowBlock (params : List String) (body : List Stmt)
+  | arrowBlock (params : List Parameter) (body : List Stmt) (returnType : Option TypeRef := none)
 
 /-- One statement in the generator fragment. The first three are the
 straight-line forms; the rest carry block graphs: definite-assignment
@@ -72,15 +83,15 @@ declarations, assignment, an unconditional loop, a selector switch, a
 conditional, and labelled control transfer. -/
 inductive Stmt where
   /-- `const name = yield* value`. -/
-  | constYield (name : String) (value : Expr)
+  | constYield (name : String) (value : Expr) (type : Option TypeRef := none)
   /-- `return value`. -/
   | ret (value : Expr)
   /-- `yield* value` with the answer discarded. -/
   | yieldDiscard (value : Expr)
   /-- `let name!: type` — declared, definitely assigned later. -/
-  | letDefinite (name : String) (type : String)
+  | letDefinite (name : String) (type : TypeRef)
   /-- `let name = value`. -/
-  | letInit (name : String) (value : Expr)
+  | letInit (name : String) (value : Expr) (type : Option TypeRef := none)
   /-- `name = value`. -/
   | assign (name : String) (value : Expr)
   /-- `while (true) { body }`, optionally labelled. -/
@@ -128,13 +139,13 @@ mutual
     | .arr xs, .arr ys => beqExprList xs ys
     | .arrow ty a, .arrow ty' b => ty == ty' && instBEqExpr.beq a b
     | .generic f xs, .generic g ys => instBEqExpr.beq f g && xs == ys
-    | .lambda ps a, .lambda qs b => ps == qs && instBEqExpr.beq a b
+    | .lambda ps a ty, .lambda qs b ty' => ps == qs && instBEqExpr.beq a b && ty == ty'
     | .method t n xs, .method u m ys => instBEqExpr.beq t u && n == m && beqExprList xs ys
     | .member t n, .member u m => instBEqExpr.beq t u && n == m
     | .generator xs, .generator ys => beqStmtList xs ys
     | .cond t a b, .cond u c d =>
       instBEqExpr.beq t u && instBEqExpr.beq a c && instBEqExpr.beq b d
-    | .arrowBlock ps xs, .arrowBlock qs ys => ps == qs && beqStmtList xs ys
+    | .arrowBlock ps xs ty, .arrowBlock qs ys ty' => ps == qs && beqStmtList xs ys && ty == ty'
     | _, _ => false
   termination_by structural self
 
@@ -158,11 +169,12 @@ mutual
 
   def instBEqStmt.beq (self other : Stmt) : Bool :=
     match self, other with
-    | .constYield a x, .constYield b y => a == b && instBEqExpr.beq x y
+    | .constYield a x ty, .constYield b y ty' => a == b && instBEqExpr.beq x y && ty == ty'
     | .ret x, .ret y | .yieldDiscard x, .yieldDiscard y | .exprStmt x, .exprStmt y =>
       instBEqExpr.beq x y
     | .letDefinite a t, .letDefinite b u => a == b && t == u
-    | .letInit a x, .letInit b y | .assign a x, .assign b y => a == b && instBEqExpr.beq x y
+    | .letInit a x ty, .letInit b y ty' => a == b && instBEqExpr.beq x y && ty == ty'
+    | .assign a x, .assign b y => a == b && instBEqExpr.beq x y
     | .whileTrue l xs, .whileTrue m ys => l == m && beqStmtList xs ys
     | .switch x cs, .switch y ds => instBEqExpr.beq x y && beqStmtCases cs ds
     | .ifElse c xs xs', .ifElse d ys ys' =>
@@ -198,12 +210,13 @@ end
 instance instBEqExpr : BEq Expr := ⟨instBEqExpr.beq⟩
 instance instBEqStmt : BEq Stmt := ⟨instBEqStmt.beq⟩
 
-/-- An exported constant declaration with an optional target type spelling. -/
+/-- A constant declaration with an optional structural target type. -/
 structure ConstDecl where
   doc : List String
   name : String
   value : Expr
-  type : Option String := none
+  type : Option TypeRef := none
+  exported : Bool := true
   deriving BEq
 
 /-- An exported straight-line Effect generator declaration. -/
@@ -211,8 +224,9 @@ structure ProgDecl where
   doc : List String
   name : String
   paramName : String
-  paramType : String
+  paramType : TypeRef
   stmts : List Stmt
+  exported : Bool := true
   deriving BEq
 
 /-- One checked effectful Schema field API. This target-only node retains all
@@ -238,6 +252,7 @@ structure ClassDecl where
   name : String
   heritage : Option Expr
   members : List String := []
+  exported : Bool := true
   deriving BEq
 
 /-- One declaration in a generated TypeScript module. `raw` is retained only
@@ -251,16 +266,31 @@ inductive Decl where
   | raw (text : String)
   deriving BEq
 
+/-- An imported name, its local alias, and its per-binding type-only marker. -/
+structure ImportBinding where
+  imported : String
+  localName : String
+  typeOnly : Bool := false
+  deriving BEq, DecidableEq
+
+/-- A plain import name keeps the same local name and is a value binding. -/
+instance : Coe String ImportBinding := ⟨fun name => ⟨name, name, false⟩⟩
+
 /-- An import declaration in the retained target fragment. -/
 inductive Import where
-  | all (name : String) (path : String)
-  | named (names : List String) (path : String)
-  | types (names : List String) (path : String)
+  | all (name : String) (path : String) (typeOnly : Bool := false)
+  | named (names : List ImportBinding) (path : String) (typeOnly : Bool := false)
+  deriving BEq, DecidableEq
+
+/-- Compatibility builder for an unaliased declaration-level type import. -/
+def Import.types (names : List String) (path : String) : Import :=
+  .named (names.map fun name => ⟨name, name, false⟩) path true
 
 /-- A generated TypeScript module. -/
 structure Module where
   header : List String
   imports : List Import
   decls : List Decl
+  deriving BEq
 
 end TypeScript

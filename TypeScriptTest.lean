@@ -1,2 +1,3 @@
 import TypeScriptTest.RenderSmoke
 import TypeScriptTest.StructureSmoke
+import TypeScriptTest.TypeRef
