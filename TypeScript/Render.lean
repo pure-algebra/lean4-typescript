@@ -121,6 +121,7 @@ private def containsNewline (value : String) : Bool :=
 def propertyName (style : Style) : KeyForm → String → String
   | .plain, name => name
   | .quoted, name => quoted style name
+  | .computed, name => "[" ++ quoted style name ++ "]"
 
 mutual
 

@@ -33,6 +33,11 @@ inductive KeyForm where
   | plain
   /-- `{ "a": v }`: each name quoted, as `objectQuoted` writes it. -/
   | quoted
+  /-- `{ ["a"]: v }`: each name computed from its quoted string. One computed key
+  computes all, so this form never writes a plain or quoted key; a computed
+  `["__proto__"]` defines an own property, which the plain and quoted spellings do
+  not. -/
+  | computed
   deriving DecidableEq, Repr
 
 mutual

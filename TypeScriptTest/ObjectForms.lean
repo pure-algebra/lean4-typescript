@@ -167,6 +167,52 @@ record update; a later entry overrides an earlier one, so order is meaning. -/
 #guard Render.expr house0 0 (.objectWith .plain [.spread (.ident "t"), .property "b" (.ident "y")]) !=
   Render.expr house0 0 (.objectWith .plain [.property "b" (.ident "y"), .spread (.ident "t")])
 
+/-! ## Computed object keys
+
+A plain or quoted `__proto__` key in an object literal sets the prototype and creates
+no own property; a computed key `["__proto__"]` defines one. That is the run-time
+control behind this form (node v22.23.2, `field-names.cjs` in the type-language
+probe's seat R host folder: `plainLiteralOwn` false, `quotedLiteralOwn` false,
+`computedOwn` true). The rule is one computed key computes all: the computed form
+spells every name `["name"]`, never plain. -/
+
+#guard Render.expr house0 0
+    (.objectWith .computed [.property "__proto__" (.ident "v"), .property "a" (.int 1)]) =
+  "{ [\"__proto__\"]: v, [\"a\"]: 1 }"
+-- Names are data: the one string owner escapes them inside the brackets.
+#guard Render.expr house0 0 (.objectWith .computed [.property "a\"b" (.int 1)]) =
+  "{ [\"a\\\"b\"]: 1 }"
+-- The update at a `__proto__` name: a spread, then the computed key.
+#guard Render.expr house0 0
+    (.objectWith .computed [.spread (.ident "t"), .property "__proto__" (.str "x")]) =
+  "{ ...t, [\"__proto__\"]: \"x\" }"
+#guard Render.expr house0 0 (.objectWith .computed
+    [.property "__proto__" (.str "x"), .property "step" (.arrowBlock ["a1"] [.ret (.ident "a1")])]) =
+  "{\n  [\"__proto__\"]: \"x\",\n  [\"step\"]: (a1) => {\n    return a1\n  },\n}"
+-- Every name of a computed literal is computed, whatever its class.
+#guard ["__proto__", "a", "a-b", "", "default", "名前"].all fun name =>
+  Render.expr house0 0 (.objectWith .computed [.property name (.int 1)]) ==
+    "{ [" ++ Render.quoted house0 name ++ "]: 1 }"
+-- Quoted keys stay as the package renders them.
+#guard Render.expr house0 0 (.objectQuoted [("a-b", .int 1)]) = "{ \"a-b\": 1 }"
+#guard Render.expr house0 0 (.objectWith .quoted [.property "a-b" (.int 1)]) = "{ \"a-b\": 1 }"
+
+-- Red twins: the computed spelling is neither the plain nor the quoted one (the two
+-- that create no own property), nor `Object.fromEntries` (which does not type at a
+-- record type), and the key form is part of the identity.
+#guard Render.expr house0 0 (.objectWith .computed [.property "__proto__" (.ident "v")]) !=
+  "{ __proto__: v }"
+#guard Render.expr house0 0 (.objectWith .computed [.property "__proto__" (.ident "v")]) !=
+  Render.expr house0 0 (.objectWith .plain [.property "__proto__" (.ident "v")])
+#guard Render.expr house0 0 (.objectWith .computed [.property "__proto__" (.ident "v")]) !=
+  Render.expr house0 0 (.objectWith .quoted [.property "__proto__" (.ident "v")])
+#guard (Expr.objectWith .computed [.property "a" (.int 1)] ==
+  Expr.objectWith .quoted [.property "a" (.int 1)]) = false
+#guard (Expr.objectWith .computed [.property "__proto__" (.int 1)] ==
+  Expr.objectFromEntries [("__proto__", .int 1)]) = false
+#guard (Expr.objectWith .computed [.property "a" (.int 1)] ==
+  Expr.objectWith .computed [.property "a" (.int 1)]) = true
+
 /-! ## Axioms
 
 Structural equality stays at the ceiling a consumer's semantic gate holds
