@@ -117,6 +117,11 @@ def float64Bits (bits : UInt64) : String :=
 private def containsNewline (value : String) : Bool :=
   value.toUTF8.toList.contains 10
 
+/-- A property name as an `objectWith` literal's key form spells it (v0.7.0). -/
+def propertyName (style : Style) : KeyForm → String → String
+  | .plain, name => name
+  | .quoted, name => quoted style name
+
 mutual
 
 /-- Fixed-layout rendering. Ordinary objects and arrays stay inline exactly
@@ -220,6 +225,20 @@ def expr (style : Style) (depth : Nat) : Expr → String
   | .new callee args =>
     "new " ++ expr style depth callee ++ "(" ++
       String.intercalate ", " (exprs style depth args) ++ ")"
+  | .objectWith keys entries =>
+    if entries.isEmpty then "{}"
+    else
+      let rendered := objectEntries style keys (depth + 1) entries
+      if rendered.all (fun entry => !containsNewline entry.2) then
+        "{ " ++
+          String.intercalate ", " (rendered.map fun (head, value) => head ++ value) ++
+          " }"
+      else
+        "{\n" ++
+          String.intercalate "\n"
+            (rendered.map fun (head, value) =>
+              indentOf style (depth + 1) ++ head ++ value ++ ",") ++
+          "\n" ++ indentOf style depth ++ "}"
 
 def exprs (style : Style) (depth : Nat) : List Expr → List String
   | [] => []
@@ -230,6 +249,17 @@ def objectFields (style : Style) (depth : Nat) :
   | [] => []
   | (name, value) :: rest =>
     (name, expr style depth value) :: objectFields style depth rest
+
+/-- Each `objectWith` entry as its head, `name: ` spelled by the key form or `...`, and
+its rendered value. Layout reads only the values, exactly as `object` does. -/
+def objectEntries (style : Style) (keys : KeyForm) (depth : Nat) :
+    List ObjectEntry → List (String × String)
+  | [] => []
+  | .property name value :: rest =>
+    (propertyName style keys name ++ ": ", expr style depth value) ::
+      objectEntries style keys depth rest
+  | .spread value :: rest =>
+    ("...", expr style depth value) :: objectEntries style keys depth rest
 
 /-- Statements render one per line at their depth; block bodies indent one
 level. Every layout choice is a function of the syntax and the style. -/

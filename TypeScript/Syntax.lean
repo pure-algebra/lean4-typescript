@@ -24,6 +24,17 @@ structure Parameter where
 /-- A plain name coerces only to an unannotated parameter, never to a type. -/
 instance : Coe String Parameter := ⟨fun name => { name }⟩
 
+/-- v0.7.0: how an `objectWith` literal spells its property names, one choice for the
+whole literal. Names are data in every form; the consumer that picks `plain` checks
+that each name is an identifier. -/
+inductive KeyForm where
+  /-- `{ a: v }`: each name written as it is, as `object` writes it. A plain or quoted
+  `__proto__` key sets the prototype instead of defining a property. -/
+  | plain
+  /-- `{ "a": v }`: each name quoted, as `objectQuoted` writes it. -/
+  | quoted
+  deriving DecidableEq, Repr
+
 mutual
 /-- Expressions in the retained target fragment. Names and optional type
 annotations are structured target data; later typed lowering is responsible for
@@ -86,6 +97,11 @@ inductive Expr where
   callee renders as it is: a consumer passes a name, a member, an element or a
   generic reference, never a call, which `new` would apply first. -/
   | new (callee : Expr) (args : List Expr)
+  /-- v0.7.0: an object literal of properties and spreads, rendered in written order,
+  each property name spelled by `keys`: `{ ...t, b: y }` is the record update. Order
+  is meaning, since a later entry overrides an earlier one. Without a spread, the
+  `plain` and `quoted` forms render as `object` and `objectQuoted` do. -/
+  | objectWith (keys : KeyForm) (entries : List ObjectEntry)
 
 /-- One statement in the generator fragment. The first three are the
 straight-line forms; the rest carry block graphs: definite-assignment
@@ -125,10 +141,18 @@ inductive Stmt where
   | continueTo (label : Option String)
   /-- `value` as a statement. -/
   | exprStmt (value : Expr)
+
+/-- v0.7.0: one entry of an `objectWith` literal. -/
+inductive ObjectEntry where
+  /-- `name: value`, the name spelled by the literal's `KeyForm`. -/
+  | property (name : String) (value : Expr)
+  /-- `...value`: the own enumerable properties of `value`, copied at this position. -/
+  | spread (value : Expr)
 end
 
 instance : Inhabited Expr := ⟨.ident ""⟩
 instance : Inhabited Stmt := ⟨.breakTo none⟩
+instance : Inhabited ObjectEntry := ⟨.spread default⟩
 
 -- Keep the existing equality API total. Lean's BEq deriving handler uses a
 -- partial helper for nested inductives; these structural recursions traverse
@@ -158,6 +182,7 @@ mutual
     | .arrowBlock ps xs ty, .arrowBlock qs ys ty' => ps == qs && beqStmtList xs ys && ty == ty'
     | .index t k, .index u j => instBEqExpr.beq t u && instBEqExpr.beq k j
     | .new f xs, .new g ys => instBEqExpr.beq f g && beqExprList xs ys
+    | .objectWith k xs, .objectWith l ys => k == l && beqObjectEntries xs ys
     | _, _ => false
   termination_by structural self
 
@@ -217,10 +242,25 @@ mutual
   def beqStmtCase (self other : Nat × List Stmt) : Bool :=
     self.1 == other.1 && beqStmtList self.2 other.2
   termination_by structural self
+
+  def beqObjectEntries (self other : List ObjectEntry) : Bool :=
+    match self, other with
+    | [], [] => true
+    | a :: xs, b :: ys => instBEqObjectEntry.beq a b && beqObjectEntries xs ys
+    | _, _ => false
+  termination_by structural self
+
+  def instBEqObjectEntry.beq (self other : ObjectEntry) : Bool :=
+    match self, other with
+    | .property n a, .property m b => n == m && instBEqExpr.beq a b
+    | .spread a, .spread b => instBEqExpr.beq a b
+    | _, _ => false
+  termination_by structural self
 end
 
 instance instBEqExpr : BEq Expr := ⟨instBEqExpr.beq⟩
 instance instBEqStmt : BEq Stmt := ⟨instBEqStmt.beq⟩
+instance instBEqObjectEntry : BEq ObjectEntry := ⟨instBEqObjectEntry.beq⟩
 
 /-- A constant declaration with an optional structural target type. -/
 structure ConstDecl where

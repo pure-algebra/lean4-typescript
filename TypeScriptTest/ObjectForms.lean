@@ -112,6 +112,61 @@ list always renders. -/
 #guard (Expr.new (.ident "C") [.int 1] == Expr.new (.ident "C") [.int 1]) = true
 #guard Render.expr house0 0 (.new (.ident "C") []) != Render.expr house0 0 (.call (.ident "C") [])
 
+/-! ## Object spread
+
+`objectWith` is an object literal of properties and spreads in written order, its
+property names spelled by one `KeyForm` for the whole literal. `{ ...t, b: y }` is the
+record update; a later entry overrides an earlier one, so order is meaning. -/
+
+#guard Render.expr house0 0 (.objectWith .plain [.spread (.ident "t"), .property "b" (.ident "y")]) =
+  "{ ...t, b: y }"
+#guard Render.expr house0 0 (.objectWith .plain [.property "b" (.ident "y"), .spread (.ident "t")]) =
+  "{ b: y, ...t }"
+#guard Render.expr house0 0 (.objectWith .plain [.spread (.ident "a"), .spread (.ident "b")]) =
+  "{ ...a, ...b }"
+-- The update at names outside the identifier profile: the quoted form.
+#guard Render.expr house0 0 (.objectWith .quoted [.spread (.ident "t"), .property "a-b" (.int 1)]) =
+  "{ ...t, \"a-b\": 1 }"
+-- The spread operand is any expression.
+#guard Render.expr house0 0
+    (.objectWith .plain [.spread (.member (.ident "a0") "user"), .property "id" (.int 2)]) =
+  "{ ...a0.user, id: 2 }"
+#guard Render.expr house0 0 (.objectWith .plain []) = "{}"
+-- Multiline exactly when a rendered value has a newline, one entry per line.
+#guard Render.expr house0 0 (.objectWith .plain
+    [.spread (.ident "t"), .property "step" (.arrowBlock ["a1"] [.ret (.ident "a1")])]) =
+  "{\n  ...t,\n  step: (a1) => {\n    return a1\n  },\n}"
+
+-- Without a spread, the plain and quoted forms render as `object` and `objectQuoted` do,
+-- inline and multiline: a consumer picks one spelling per shape.
+#guard Render.expr house0 0 (.objectWith .plain [.property "a" (.int 1), .property "b" (.str "x")]) =
+  Render.expr house0 0 (.object [("a", .int 1), ("b", .str "x")])
+#guard Render.expr house0 0 (.objectWith .quoted [.property "a-b" (.int 1), .property "c" (.str "x")]) =
+  Render.expr house0 0 (.objectQuoted [("a-b", .int 1), ("c", .str "x")])
+#guard Render.expr house0 1 (.objectWith .plain
+    [.property "step" (.arrowBlock ["a1"] [.ret (.ident "a1")]), .property "n" (.int 2)]) =
+  Render.expr house0 1 (.object [("step", .arrowBlock ["a1"] [.ret (.ident "a1")]), ("n", .int 2)])
+#guard Render.expr house0 1 (.objectWith .quoted
+    [.property "step" (.arrowBlock ["a1"] [.ret (.ident "a1")]), .property "n" (.int 2)]) =
+  Render.expr house0 1 (.objectQuoted [("step", .arrowBlock ["a1"] [.ret (.ident "a1")]), ("n", .int 2)])
+
+-- Red twins: a spread is not a property of the same name, order and key form are part
+-- of the identity, and the new former is not the old one.
+#guard (Expr.objectWith .plain [.spread (.ident "t")] ==
+  Expr.objectWith .plain [.property "t" (.ident "t")]) = false
+#guard (Expr.objectWith .plain [.spread (.ident "a"), .spread (.ident "b")] ==
+  Expr.objectWith .plain [.spread (.ident "b"), .spread (.ident "a")]) = false
+#guard (Expr.objectWith .plain [.property "a" (.int 1)] ==
+  Expr.objectWith .quoted [.property "a" (.int 1)]) = false
+#guard (Expr.objectWith .plain [.property "a" (.int 1)] == Expr.object [("a", .int 1)]) = false
+#guard (Expr.objectWith .plain [.spread (.ident "t"), .property "b" (.ident "y")] ==
+  Expr.objectWith .plain [.spread (.ident "t"), .property "b" (.ident "y")]) = true
+#guard (ObjectEntry.spread (.ident "t") == ObjectEntry.spread (.ident "u")) = false
+#guard Render.expr house0 0 (.objectWith .plain [.spread (.ident "t")]) !=
+  Render.expr house0 0 (.objectWith .plain [.property "t" (.ident "t")])
+#guard Render.expr house0 0 (.objectWith .plain [.spread (.ident "t"), .property "b" (.ident "y")]) !=
+  Render.expr house0 0 (.objectWith .plain [.property "b" (.ident "y"), .spread (.ident "t")])
+
 /-! ## Axioms
 
 Structural equality stays at the ceiling a consumer's semantic gate holds
@@ -123,5 +178,7 @@ Structural equality stays at the ceiling a consumer's semantic gate holds
 #guard_msgs in #print axioms TypeScript.TypeRef.instDecidableEq
 /-- info: 'TypeScript.instBEqExpr.beq' depends on axioms: [propext] -/
 #guard_msgs in #print axioms TypeScript.instBEqExpr.beq
+/-- info: 'TypeScript.instBEqObjectEntry.beq' depends on axioms: [propext] -/
+#guard_msgs in #print axioms TypeScript.instBEqObjectEntry.beq
 
 end TypeScriptTest.ObjectForms
