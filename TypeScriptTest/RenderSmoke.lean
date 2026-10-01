@@ -21,7 +21,7 @@ open TypeScript
 
 example : Render.decl house0 (.classDecl
     { doc := [], name := "Cell",
-      heritage := some (.call (.call (.generic (.ident "Context.Service") [.name ["Cell"] [], .object [("get", true, .function [] (.name ["Effect", "Effect"] [.name ["number"] []]))]]) []) [.str "Cell"]) }) =
+      heritage := some (.call (.call (.generic (.ident "Context.Service") [.name ["Cell"] [], .object [{ name := "get", readonly := true, type := .function [] (.name ["Effect", "Effect"] [.name ["number"] []]) }]]) []) [.str "Cell"]) }) =
     "export class Cell extends Context.Service<Cell, { readonly get: () => Effect.Effect<number> }>()(\"Cell\") {}\n" := by
   native_decide
 

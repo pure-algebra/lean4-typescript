@@ -22,9 +22,9 @@ def effect : TypeRef := .name ["Effect", "Effect"] [number, never, never]
 #guard Render.type house0 (.name ["ReadonlyArray"]
     [.union [.tuple [number, string] true, .literal "none"]]) =
   "ReadonlyArray<readonly [number, string] | \"none\">"
-#guard Render.type house0 (.object [("get", true, .function [] effect)]) =
+#guard Render.type house0 (.object [{ name := "get", readonly := true, type := .function [] effect }]) =
   "{ readonly get: () => Effect.Effect<number, never, never> }"
-#guard Render.type house0 (.object [("not a name", false, string)]) =
+#guard Render.type house0 (.object [{ name := "not a name", readonly := false, type := string }]) =
   "{ \"not a name\": string }"
 #guard Render.expr house0 0
     (.lambda [{ name := "x", type := some number }] (.ident "x") (some number)) =
@@ -55,8 +55,8 @@ def effect : TypeRef := .name ["Effect", "Effect"] [number, never, never]
   .name ["Ref", "Ref"] [string]) = false
 #guard ((.literal "number" : TypeRef) == number) = false
 #guard ((.tuple [number] true : TypeRef) == .tuple [number] false) = false
-#guard ((.object [("get", true, number)] : TypeRef) ==
-  .object [("get", false, number)]) = false
+#guard ((.object [{ name := "get", readonly := true, type := number }] : TypeRef) ==
+  .object [{ name := "get", readonly := false, type := number }]) = false
 #guard ((.function [("x", number)] string : TypeRef) ==
   .function [("x", string)] string) = false
 

@@ -1,3 +1,4 @@
 import TypeScriptTest.RenderSmoke
 import TypeScriptTest.StructureSmoke
 import TypeScriptTest.TypeRef
+import TypeScriptTest.ObjectForms

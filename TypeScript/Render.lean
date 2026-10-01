@@ -77,11 +77,14 @@ def unionTypes (style : Style) : List TypeRef → List String
      | .function _ _ => "(" ++ type style item ++ ")"
      | _ => type style item) :: unionTypes style rest
 
-def typeFields (style : Style) : List (String × Bool × TypeRef) → List String
+/-- `readonly name?: type`, one field per entry. A name outside the identifier
+profile is quoted; `?` marks an optional field (v0.7.0). -/
+def typeFields (style : Style) : List TypeRef.Field → List String
   | [] => []
-  | (name, readonly, value) :: rest =>
+  | ⟨name, readonly, optional, value⟩ :: rest =>
     ((if readonly then "readonly " else "") ++
-      (if targetIdentifier name then name else quoted style name) ++ ": " ++
+      (if targetIdentifier name then name else quoted style name) ++
+      (if optional then "?: " else ": ") ++
       type style value) :: typeFields style rest
 
 def typeParams (style : Style) : List (String × TypeRef) → List String
