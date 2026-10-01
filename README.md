@@ -49,3 +49,30 @@ The canonical Effect4 reader must reject new annotation fields that its current
 printer does not emit. A source validator may accept a broader admitted profile,
 but cannot erase its annotations before checking them. Persisted Effect4 row
 `typeArgs` are a separate wire contract; this package does not change them.
+
+## Object forms (0.7.0)
+
+Six forms a consumer needs to print records, their updates and their error payloads.
+
+- An object type's field is a record, `TypeRef.Field` (`FieldOf TypeRef`): `name`,
+  `readonly`, `optional` and `type`. `optional` defaults to `false`, so a field built without
+  it is required, as before. It renders as `?` and nothing else, `{ readonly a?: number }`; a
+  field that also admits `undefined` carries that union in its type,
+  `{ readonly a?: number | undefined }`.
+- `Expr.index target key` renders `target[key]` with an expression key: `t["a-b"]`, `t[2]`,
+  `m[k]`. A string key is data, so no identifier rule applies to it.
+- `Expr.new callee args` renders `new callee(args)`: `new NotFound({ id: 2 })`.
+- `Expr.objectWith keys entries` is an object literal of `ObjectEntry.property` and
+  `ObjectEntry.spread` entries in written order, `{ ...t, b: y }`, and one `KeyForm` spells
+  every property name of the literal: `plain`, `quoted`, or `computed`,
+  `{ ["__proto__"]: v, ["a"]: 1 }`. A plain or quoted `__proto__` key sets the prototype
+  and creates no own property; the computed form defines one and never writes a plain key.
+  Without a spread, the plain and quoted forms render as `object` and `objectQuoted` do.
+- A `ClassDecl` whose heritage is `generic` over a call is a tagged error payload class:
+  `export class NotFound extends Data.TaggedError("NotFound")<{ readonly id: number }> {}`.
+
+This breaks consumers that build or match object-type fields as triples, and every
+exhaustive match on `Expr`, which must add arms for `index`, `new` and `objectWith`. The
+existing constructors keep their meaning and their bytes. Structural equality covers the new forms
+and stays at `[propext]`. `TypeScriptTest/ObjectForms.lean` holds the exact text, the
+equality twins and the axiom pins.

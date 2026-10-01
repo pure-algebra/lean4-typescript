@@ -99,8 +99,9 @@ inductive Expr where
   | index (target : Expr) (key : Expr)
   /-- v0.7.0: a constructor call, `new callee(args)`, as an error payload class is
   built: `new NotFound({ id: 2 })`. The argument list always renders, `new C()`. The
-  callee renders as it is: a consumer passes a name, a member, an element or a
-  generic reference, never a call, which `new` would apply first. -/
+  callee renders as it is, so a consumer passes a name, a member, an element or a
+  generic reference: a call as callee renders `new f()(x)`, which constructs `f` and
+  calls the result. -/
   | new (callee : Expr) (args : List Expr)
   /-- v0.7.0: an object literal of properties and spreads, rendered in written order,
   each property name spelled by `keys`: `{ ...t, b: y }` is the record update. Order
