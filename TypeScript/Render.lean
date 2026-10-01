@@ -215,6 +215,8 @@ def expr (style : Style) (depth : Nat) : Expr → String
     "(" ++ String.intercalate ", " (params.map (parameter style)) ++ ")" ++
       annotation style returnType ++ " => {\n" ++
       stmts style (depth + 1) body ++ indentOf style depth ++ "}"
+  | .index target key =>
+    expr style depth target ++ "[" ++ expr style depth key ++ "]"
 
 def exprs (style : Style) (depth : Nat) : List Expr → List String
   | [] => []

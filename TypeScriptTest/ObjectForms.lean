@@ -60,9 +60,44 @@ those two types are not mutually assignable under `exactOptionalPropertyTypes`. 
 #guard decide ((.object [{ name := "a", readonly := true, optional := true, type := number }] : TypeRef) =
   .object [{ name := "a", readonly := true, type := number }]) = false
 
+/-! ## Element access with an expression key
+
+A property name outside the identifier profile is read with brackets, `t["a-b"]`; a
+tuple position is read at a number, `t[2]`; a map is read at a run-time key, `m[k]`.
+The key is an expression, so a string key is data rendered by the one string owner. -/
+
+#guard Render.expr house0 0 (.index (.ident "t") (.str "a-b")) = "t[\"a-b\"]"
+#guard Render.expr house0 0 (.index (.ident "t") (.int 2)) = "t[2]"
+#guard Render.expr house0 0 (.index (.ident "m") (.ident "k")) = "m[k]"
+#guard Render.expr house0 0 (.index (.ident "a0") (.str "a\"b")) = "a0[\"a\\\"b\"]"
+#guard Render.expr house0 0 (.index (.ident "a0") (.str "__proto__")) = "a0[\"__proto__\"]"
+-- It composes with member access, calls and itself.
+#guard Render.expr house0 0 (.member (.index (.ident "t") (.int 0)) "id") = "t[0].id"
+#guard Render.expr house0 0 (.index (.index (.ident "t") (.int 0)) (.int 1)) = "t[0][1]"
+#guard Render.expr house0 0 (.index (.call (.ident "f") []) (.str "a-b")) = "f()[\"a-b\"]"
+#guard Render.expr house0 0 (.call (.ident "pair") [.int 200, .index (.ident "a0") (.str "a-b")]) =
+  "pair(200, a0[\"a-b\"])"
+
+-- Red twins: bracket access at a string is not member access at that name, a string key
+-- is not a number key or a variable, and target and key are both part of the identity.
+#guard (Expr.index (.ident "t") (.str "a") == Expr.member (.ident "t") "a") = false
+#guard (Expr.index (.ident "t") (.str "2") == Expr.index (.ident "t") (.int 2)) = false
+#guard (Expr.index (.ident "t") (.ident "k") == Expr.index (.ident "t") (.str "k")) = false
+#guard (Expr.index (.ident "t") (.str "a") == Expr.index (.ident "u") (.str "a")) = false
+#guard (Expr.index (.ident "t") (.str "a") == Expr.index (.ident "t") (.str "a")) = true
+#guard Render.expr house0 0 (.index (.ident "t") (.str "a")) !=
+  Render.expr house0 0 (.member (.ident "t") "a")
+
+/-! ## Axioms
+
+Structural equality stays at the ceiling a consumer's semantic gate holds
+(`[propext, Quot.sound]` or less); only rendering traverses `String`. -/
+
 /-- info: 'TypeScript.TypeRef.beq_iff' depends on axioms: [propext] -/
 #guard_msgs in #print axioms TypeScript.TypeRef.beq_iff
 /-- info: 'TypeScript.TypeRef.instDecidableEq' depends on axioms: [propext] -/
 #guard_msgs in #print axioms TypeScript.TypeRef.instDecidableEq
+/-- info: 'TypeScript.instBEqExpr.beq' depends on axioms: [propext] -/
+#guard_msgs in #print axioms TypeScript.instBEqExpr.beq
 
 end TypeScriptTest.ObjectForms

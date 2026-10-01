@@ -76,6 +76,11 @@ inductive Expr where
   /-- v0.5.0: a named-parameter arrow with a block body, `(a) => { body }`.
   Zero parameters render `() => { body }`. -/
   | arrowBlock (params : List Parameter) (body : List Stmt) (returnType : Option TypeRef := none)
+  /-- v0.7.0: element access, `target[key]`: `t["a-b"]`, `t[2]`, `m[k]`. The key is an
+  expression, so a property name outside the identifier profile is string data here,
+  never a name the identifier profile checks; `member` stays the access at an
+  identifier. -/
+  | index (target : Expr) (key : Expr)
 
 /-- One statement in the generator fragment. The first three are the
 straight-line forms; the rest carry block graphs: definite-assignment
@@ -146,6 +151,7 @@ mutual
     | .cond t a b, .cond u c d =>
       instBEqExpr.beq t u && instBEqExpr.beq a c && instBEqExpr.beq b d
     | .arrowBlock ps xs ty, .arrowBlock qs ys ty' => ps == qs && beqStmtList xs ys && ty == ty'
+    | .index t k, .index u j => instBEqExpr.beq t u && instBEqExpr.beq k j
     | _, _ => false
   termination_by structural self
 
