@@ -81,6 +81,11 @@ inductive Expr where
   never a name the identifier profile checks; `member` stays the access at an
   identifier. -/
   | index (target : Expr) (key : Expr)
+  /-- v0.7.0: a constructor call, `new callee(args)`, as an error payload class is
+  built: `new NotFound({ id: 2 })`. The argument list always renders, `new C()`. The
+  callee renders as it is: a consumer passes a name, a member, an element or a
+  generic reference, never a call, which `new` would apply first. -/
+  | new (callee : Expr) (args : List Expr)
 
 /-- One statement in the generator fragment. The first three are the
 straight-line forms; the rest carry block graphs: definite-assignment
@@ -152,6 +157,7 @@ mutual
       instBEqExpr.beq t u && instBEqExpr.beq a c && instBEqExpr.beq b d
     | .arrowBlock ps xs ty, .arrowBlock qs ys ty' => ps == qs && beqStmtList xs ys && ty == ty'
     | .index t k, .index u j => instBEqExpr.beq t u && instBEqExpr.beq k j
+    | .new f xs, .new g ys => instBEqExpr.beq f g && beqExprList xs ys
     | _, _ => false
   termination_by structural self
 

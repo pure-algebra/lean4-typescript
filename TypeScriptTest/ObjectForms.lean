@@ -88,6 +88,30 @@ The key is an expression, so a string key is data rendered by the one string own
 #guard Render.expr house0 0 (.index (.ident "t") (.str "a")) !=
   Render.expr house0 0 (.member (.ident "t") "a")
 
+/-! ## `new`
+
+A payload class's value is built with `new`, `new NotFound({ id: 2 })`; the argument
+list always renders. -/
+
+#guard Render.expr house0 0 (.new (.ident "NotFound") [.object [("id", .int 2)]]) =
+  "new NotFound({ id: 2 })"
+#guard Render.expr house0 0 (.new (.ident "Date") []) = "new Date()"
+#guard Render.expr house0 0 (.new (.generic (.ident "Box") [number]) [.int 1, .str "a"]) =
+  "new Box<number>(1, \"a\")"
+#guard Render.expr house0 0 (.new (.member (.ident "Errors") "NotFound") [.object [("id", .int 2)]]) =
+  "new Errors.NotFound({ id: 2 })"
+#guard Render.stmt house0 1 (.ret (.call (.ident "Effect.fail")
+    [.new (.ident "NotFound") [.object [("id", .ident "a0")]]])) =
+  "  return Effect.fail(new NotFound({ id: a0 }))"
+
+-- Red twins: `new C()` is not the call `C()`, and callee and arguments are both part of
+-- the identity.
+#guard (Expr.new (.ident "C") [] == Expr.call (.ident "C") []) = false
+#guard (Expr.new (.ident "C") [.int 1] == Expr.new (.ident "C") [.int 2]) = false
+#guard (Expr.new (.ident "C") [] == Expr.new (.ident "D") []) = false
+#guard (Expr.new (.ident "C") [.int 1] == Expr.new (.ident "C") [.int 1]) = true
+#guard Render.expr house0 0 (.new (.ident "C") []) != Render.expr house0 0 (.call (.ident "C") [])
+
 /-! ## Axioms
 
 Structural equality stays at the ceiling a consumer's semantic gate holds

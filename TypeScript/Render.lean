@@ -217,6 +217,9 @@ def expr (style : Style) (depth : Nat) : Expr → String
       stmts style (depth + 1) body ++ indentOf style depth ++ "}"
   | .index target key =>
     expr style depth target ++ "[" ++ expr style depth key ++ "]"
+  | .new callee args =>
+    "new " ++ expr style depth callee ++ "(" ++
+      String.intercalate ", " (exprs style depth args) ++ ")"
 
 def exprs (style : Style) (depth : Nat) : List Expr → List String
   | [] => []
