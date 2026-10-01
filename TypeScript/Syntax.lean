@@ -303,7 +303,9 @@ structure EffectfulFieldDecl where
 
 /-- An exported class with an optional heritage expression and verbatim
 member lines. The heritage is an expression because Effect's service classes
-extend a call, `Context.Service<Self, Shape>()("Name")`. -/
+extend a call, `Context.Service<Self, Shape>()("Name")`, and a tagged error
+payload class extends a call with type arguments,
+`Data.TaggedError("NotFound")<{ readonly id: number }>`: `generic` over the call. -/
 structure ClassDecl where
   doc : List String
   name : String

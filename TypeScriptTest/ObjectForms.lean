@@ -213,6 +213,46 @@ spells every name `["name"]`, never plain. -/
 #guard (Expr.objectWith .computed [.property "a" (.int 1)] ==
   Expr.objectWith .computed [.property "a" (.int 1)]) = true
 
+/-! ## The class declaration with type arguments on its heritage
+
+`ClassDecl` already says this: the heritage is `generic` over a call, so the type
+argument list follows the call. The payload class and the value `new` builds: -/
+
+def payloadType : TypeRef := .object [{ name := "id", readonly := true, type := number }]
+
+def notFound : ClassDecl :=
+  { doc := [], name := "NotFound",
+    heritage := some (.generic (.call (.ident "Data.TaggedError") [.str "NotFound"]) [payloadType]) }
+
+#guard Render.decl house0 (.classDecl notFound) =
+  "export class NotFound extends Data.TaggedError(\"NotFound\")<{ readonly id: number }> {}\n"
+
+-- With an optional payload field, and in a module beside the value `new` builds.
+#guard Render.module house0
+    { header := ["Payload classes."],
+      imports := [.named ["Data", "Effect"] "effect"],
+      decls :=
+        [ .classDecl
+            { notFound with
+              heritage := some (.generic (.call (.ident "Data.TaggedError") [.str "NotFound"])
+                [.object [{ name := "id", readonly := true, type := number },
+                  { name := "note", readonly := true, optional := true, type := string }]]) },
+          .const
+            { doc := [], name := "missing",
+              value := .call (.ident "Effect.fail") [.new (.ident "NotFound") [.object [("id", .int 2)]]] } ] } =
+  "/**\n * Payload classes.\n */\nimport { Data, Effect } from \"effect\"\n\n" ++
+  "export class NotFound extends Data.TaggedError(\"NotFound\")<{ readonly id: number; readonly note?: string }> {}\n\n" ++
+  "export const missing = Effect.fail(new NotFound({ id: 2 }))\n"
+
+-- Red twins: the type arguments belong after the call, not on the callee, and they are
+-- part of the declaration's identity.
+#guard Render.decl house0 (.classDecl notFound) !=
+  Render.decl house0 (.classDecl { notFound with
+    heritage := some (.call (.generic (.ident "Data.TaggedError") [payloadType]) [.str "NotFound"]) })
+#guard (Decl.classDecl notFound == .classDecl { notFound with
+    heritage := some (.call (.ident "Data.TaggedError") [.str "NotFound"]) }) = false
+#guard (Decl.classDecl notFound == .classDecl notFound) = true
+
 /-! ## Axioms
 
 Structural equality stays at the ceiling a consumer's semantic gate holds
